@@ -1,5 +1,9 @@
 # Instagram Analytics — UCSB Department of Recreation
 
+## Live Reports
+- [Spring 2026 Analysis](https://mathildegourlin-design.github.io/instagram-analytics-ucsb-rec/ucsb_rec_spring_analysis.html)
+- [Winter 2026 Analysis](https://mathildegourlin-design.github.io/instagram-analytics-ucsb-rec/winter-R-analytics.html)
+
 Quarterly social media performance analysis for the UCSB Department 
 of Recreation Instagram account (~10,600 followers), built in R with 
 tidyverse and presented to department stakeholders.
