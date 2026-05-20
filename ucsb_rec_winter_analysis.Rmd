@@ -1,0 +1,484 @@
+---
+title: "UCSB Department of Recreation"
+subtitle: "Instagram Analytics — Winter Quarter 2026"
+author: "Mathilde Gourlin"
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float:
+      collapsed: false
+    toc_depth: 3
+    number_sections: true
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo    = FALSE,
+  message = FALSE,
+  warning = FALSE,
+  fig.width  = 10,
+  fig.height = 5.5,
+  dpi = 150
+)
+```
+
+```{r packages}
+required_packages <- c("tidyverse", "lubridate", "scales",
+                        "patchwork", "knitr", "kableExtra", "ggtext")
+to_install <- required_packages[!required_packages %in% rownames(installed.packages())]
+if (length(to_install)) install.packages(to_install, quiet = TRUE)
+
+library(tidyverse)
+library(lubridate)
+library(scales)
+library(patchwork)
+library(knitr)
+library(kableExtra)
+library(ggtext)
+```
+
+```{r theme}
+ucsb_blue  <- "#003660"
+ucsb_gold  <- "#FEBC11"
+ucsb_navy  <- "#002542"
+ucsb_light <- "#9CBEBE"
+ucsb_grey  <- "#BBC8CB"
+
+theme_ucsb <- function() {
+  theme_minimal(base_size = 12) +
+    theme(
+      plot.title       = element_text(color = ucsb_blue, face = "bold", size = 14),
+      plot.subtitle    = element_text(color = "grey40",  size = 10),
+      plot.caption     = element_text(color = "grey55",  size = 8),
+      axis.title       = element_text(color = ucsb_navy, size = 10),
+      axis.text        = element_text(color = "grey30"),
+      panel.grid.minor = element_blank(),
+      panel.grid.major = element_line(color = "grey92"),
+      legend.position  = "bottom",
+      strip.text       = element_text(color = ucsb_blue, face = "bold")
+    )
+}
+```
+
+```{r load-data}
+if (rstudioapi::isAvailable()) {
+  script_dir <- dirname(rstudioapi::getSourceEditorContext()$path)
+  if (nchar(script_dir) > 0) setwd(script_dir)
+}
+
+needed  <- c("posts_clean.csv", "reels_clean.csv", "demographics_clean.csv")
+missing <- needed[!file.exists(needed)]
+if (length(missing)) stop("Missing files: ", paste(missing, collapse = ", "))
+
+day_levels <- c("Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday")
+
+posts <- read_csv("posts_clean (1).csv", show_col_types = FALSE) |>
+  mutate(
+    Time_Posted = ymd_hms(Time_Posted),
+    Date        = as.Date(Date),
+    Media_Type  = str_to_title(Media_Type),
+    DayOfWeek   = factor(DayOfWeek, levels = day_levels),
+    Month       = factor(Month, levels = c("January","February","March"))
+  )
+
+reels <- read_csv("reels_clean (1).csv", show_col_types = FALSE) |>
+  mutate(
+    Time_Posted = ymd_hms(Time_Posted),
+    Date        = as.Date(Date),
+    DayOfWeek   = factor(DayOfWeek, levels = day_levels),
+    Month       = factor(Month, levels = c("January","February","March"))
+  )
+
+demo <- read_csv("demographics_clean.csv", show_col_types = FALSE)
+```
+
+---
+
+# Executive Summary
+
+Winter Quarter 2026 ran from **January 5 – March 21, 2026**.
+UCSB Recreation published **`r nrow(posts)` posts** and **`r nrow(reels)` reels**, achieving
+an average engagement rate of **`r round(mean(posts$Engagement_Rate_Pct), 1)`%** on posts
+above the 1–3% industry benchmark for institutional accounts.
+The dominant format was **carousel** (`r sum(posts$Media_Type == "Carousel")` posts),
+followed by **video** (`r sum(posts$Media_Type == "Video")`) and
+**image** (`r sum(posts$Media_Type == "Image")`).
+
+---
+
+# Post Performance {.tabset}
+
+## Key Metrics
+
+```{r post-kpis}
+tibble(
+  Metric = c("Total Posts", "Avg Engagement Rate", "Avg Reach",
+             "Avg Views", "Total Likes", "Total Saves", "Total Shares"),
+  Value  = c(
+    nrow(posts),
+    paste0(round(mean(posts$Engagement_Rate_Pct), 2), "%"),
+    comma(round(mean(posts$Reach))),
+    comma(round(mean(posts$Views))),
+    comma(sum(posts$Likes,   na.rm = TRUE)),
+    comma(sum(posts$Saves,   na.rm = TRUE)),
+    comma(sum(posts$Shares,  na.rm = TRUE))
+  )
+) |>
+  kbl(align = c("l","r")) |>
+  kable_styling(bootstrap_options = c("striped","hover","condensed"), full_width = FALSE)
+```
+
+## Engagement Rate by Media Type
+
+```{r media-type-plot}
+p_media <- posts |>
+  ggplot(aes(x = Media_Type, y = Engagement_Rate_Pct, fill = Media_Type)) +
+  geom_violin(alpha = 0.35, color = "white", trim = FALSE) +
+  geom_boxplot(width = 0.15, outlier.shape = 21, outlier.size = 2.5,
+               outlier.fill = ucsb_gold) +
+  stat_summary(fun = mean, geom = "point", shape = 23,
+               size = 3, fill = ucsb_gold, color = ucsb_navy) +
+  scale_fill_manual(values = c("Carousel" = ucsb_blue,
+                                "Video"    = ucsb_light,
+                                "Image"    = ucsb_grey)) +
+  scale_y_continuous(labels = function(x) paste0(x, "%")) +
+  labs(
+    title    = "Engagement Rate by Media Type",
+    subtitle = "Diamond = mean  |  Box = median & IQR  |  Winter Quarter 2026",
+    x = NULL, y = "Engagement Rate",
+    caption  = "Source: UCSB Rec Instagram Post data"
+  ) +
+  theme_ucsb() +
+  theme(legend.position = "none")
+
+p_media_reach <- posts |>
+  ggplot(aes(x = Media_Type, y = Reach, fill = Media_Type)) +
+  geom_boxplot(width = 0.4, outlier.shape = 21, outlier.size = 2.5,
+               outlier.fill = ucsb_gold, alpha = 0.7) +
+  scale_fill_manual(values = c("Carousel" = ucsb_blue,
+                                "Video"    = ucsb_light,
+                                "Image"    = ucsb_grey)) +
+  scale_y_continuous(labels = comma) +
+  labs(
+    title    = "Reach by Media Type",
+    x = NULL, y = "Reach",
+    caption  = " "
+  ) +
+  theme_ucsb() +
+  theme(legend.position = "none")
+
+p_media + p_media_reach
+```
+
+```{r media-summary-table}
+posts |>
+  group_by(Media_Type) |>
+  summarise(
+    `# Posts`      = n(),
+    `Avg Eng Rate` = paste0(round(mean(Engagement_Rate_Pct), 2), "%"),
+    `Avg Reach`    = comma(round(mean(Reach))),
+    `Avg Views`    = comma(round(mean(Views))),
+    `Avg Likes`    = round(mean(Likes,  na.rm = TRUE)),
+    `Avg Shares`   = round(mean(Shares, na.rm = TRUE))
+  ) |>
+  kbl(align = c("l","c","r","r","r","r","r")) |>
+  kable_styling(bootstrap_options = c("striped","hover","condensed"), full_width = FALSE)
+```
+
+## Weekly Trends
+
+```{r weekly-trends}
+weekly <- posts |>
+  group_by(Week) |>
+  summarise(
+    Total_Reach       = sum(Reach),
+    Total_Engagements = sum(Engagements),
+    Avg_Eng_Rate      = mean(Engagement_Rate_Pct),
+    n_posts           = n()
+  )
+
+ggplot(weekly, aes(x = Week)) +
+  geom_col(aes(y = Total_Reach), fill = ucsb_light, alpha = 0.85, width = 0.6) +
+  geom_line(aes(y = Total_Engagements * 15), color = ucsb_blue, linewidth = 1.2) +
+  geom_point(aes(y = Total_Engagements * 15), color = ucsb_gold, size = 3.5) +
+  geom_text(aes(y = Total_Engagements * 15, label = Total_Engagements),
+            vjust = -0.8, size = 3, color = ucsb_navy, fontface = "bold") +
+  scale_y_continuous(
+    name     = "Total Reach",
+    labels   = comma,
+    sec.axis = sec_axis(~ . / 15, name = "Total Engagements", labels = comma)
+  ) +
+  scale_x_continuous(breaks = weekly$Week) +
+  labs(
+    title    = "Weekly Reach & Engagements — Winter Quarter 2026",
+    subtitle = "Bars = Total Reach  |  Line + labels = Total Engagements",
+    x = "Week of Year",
+    caption  = "Source: UCSB Rec Instagram Post data"
+  ) +
+  theme_ucsb()
+```
+
+## Best Day to Post
+
+```{r day-of-week}
+day_summary <- posts |>
+  group_by(DayOfWeek) |>
+  summarise(
+    n_posts      = n(),
+    Avg_Reach    = mean(Reach),
+    Avg_Eng_Rate = mean(Engagement_Rate_Pct)
+  ) |>
+  filter(!is.na(DayOfWeek))
+
+p_day_reach <- ggplot(day_summary, aes(x = DayOfWeek, y = Avg_Reach, fill = Avg_Reach)) +
+  geom_col(show.legend = FALSE) +
+  geom_text(aes(label = comma(round(Avg_Reach))),
+            vjust = -0.4, size = 3, color = ucsb_navy) +
+  scale_fill_gradient(low = ucsb_light, high = ucsb_blue) +
+  scale_y_continuous(labels = comma, expand = expansion(mult = c(0, 0.15))) +
+  labs(title = "Avg Reach by Day of Week", x = NULL, y = "Avg Reach") +
+  theme_ucsb()
+
+p_day_er <- ggplot(day_summary, aes(x = DayOfWeek, y = Avg_Eng_Rate, fill = Avg_Eng_Rate)) +
+  geom_col(show.legend = FALSE) +
+  geom_text(aes(label = paste0(round(Avg_Eng_Rate, 1), "%")),
+            vjust = -0.4, size = 3, color = ucsb_navy) +
+  scale_fill_gradient(low = ucsb_light, high = ucsb_blue) +
+  scale_y_continuous(labels = function(x) paste0(x, "%"),
+                     expand = expansion(mult = c(0, 0.15))) +
+  labs(title = "Avg Engagement Rate by Day of Week", x = NULL, y = "Avg Eng Rate") +
+  theme_ucsb()
+
+p_day_reach / p_day_er
+```
+
+## Top 10 Posts
+
+```{r top10-chart, fig.height=5}
+top10 <- posts |>
+  arrange(desc(Engagement_Rate_Pct)) |>
+  head(10) |>
+  mutate(Label = str_wrap(str_trunc(Caption_Short, 45), 38))
+
+ggplot(top10, aes(x = Engagement_Rate_Pct,
+                  y = reorder(Label, Engagement_Rate_Pct),
+                  fill = Media_Type)) +
+  geom_col(alpha = 0.85) +
+  geom_text(aes(label = paste0(Engagement_Rate_Pct, "%")),
+            hjust = -0.1, size = 3.2, color = ucsb_navy, fontface = "bold") +
+  scale_fill_manual(values = c("Carousel" = ucsb_blue,
+                                "Video"    = ucsb_light,
+                                "Image"    = ucsb_grey)) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.18)),
+                     labels = function(x) paste0(x, "%")) +
+  labs(
+    title    = "Top 10 Posts by Engagement Rate — Winter Quarter 2026",
+    x = "Engagement Rate", y = NULL, fill = "Media Type",
+    caption  = "Source: UCSB Rec Instagram Post data"
+  ) +
+  theme_ucsb()
+```
+
+```{r top10-table}
+posts |>
+  arrange(desc(Engagement_Rate_Pct)) |>
+  head(10) |>
+  select(Date, Caption_Short, Media_Type, Engagement_Rate_Pct, Reach, Likes, Saves, Shares) |>
+  mutate(Engagement_Rate_Pct = paste0(Engagement_Rate_Pct, "%")) |>
+  rename(
+    `Caption`  = Caption_Short,
+    `Type`     = Media_Type,
+    `Eng Rate` = Engagement_Rate_Pct
+  ) |>
+  kbl() |>
+  kable_styling(bootstrap_options = c("striped","hover","condensed")) |>
+  column_spec(4, bold = TRUE, color = ucsb_blue)
+```
+
+---
+
+# Reel Performance {.tabset}
+
+## Key Metrics
+
+```{r reel-kpis}
+tibble(
+  Metric = c("Total Reels", "Avg Engagement Rate", "Avg Views",
+             "Avg Reach", "Avg Skip Rate", "Total Shares"),
+  Value  = c(
+    nrow(reels),
+    paste0(round(mean(reels$Engagement_Rate_Pct), 2), "%"),
+    comma(round(mean(reels$Views))),
+    comma(round(mean(reels$Reach))),
+    paste0(round(mean(reels$Skip_Rate_Pct, na.rm = TRUE), 1), "%"),
+    comma(sum(reels$Shares))
+  )
+) |>
+  kbl(align = c("l","r")) |>
+  kable_styling(bootstrap_options = c("striped","hover","condensed"), full_width = FALSE)
+```
+
+## Views & Engagement Over Time
+
+```{r reel-trends}
+p_reel_views <- reels |>
+  arrange(Time_Posted) |>
+  ggplot(aes(x = Date, y = Views)) +
+  geom_col(fill = ucsb_blue, alpha = 0.8, width = 2) +
+  geom_text(aes(label = comma(Views)), vjust = -0.4, size = 2.8, color = ucsb_navy) +
+  scale_y_continuous(labels = comma, expand = expansion(mult = c(0, 0.15))) +
+  scale_x_date(date_breaks = "2 weeks", date_labels = "%b %d") +
+  labs(title = "Reel Views Over Time", x = NULL, y = "Views") +
+  theme_ucsb()
+
+p_reel_er <- reels |>
+  arrange(Time_Posted) |>
+  ggplot(aes(x = Date, y = Engagement_Rate_Pct)) +
+  geom_line(color = ucsb_gold, linewidth = 1.1) +
+  geom_point(color = ucsb_blue, size = 3) +
+  scale_y_continuous(labels = function(x) paste0(x, "%")) +
+  scale_x_date(date_breaks = "2 weeks", date_labels = "%b %d") +
+  labs(title = "Reel Engagement Rate Over Time", x = NULL, y = "Engagement Rate") +
+  theme_ucsb()
+
+p_reel_views / p_reel_er
+```
+
+## Skip Rate Analysis
+
+```{r skip-rate, fig.height=4}
+reels |>
+  filter(!is.na(Skip_Rate_Pct)) |>
+  ggplot(aes(x = Skip_Rate_Pct, y = Engagement_Rate_Pct)) +
+  geom_smooth(method = "lm", se = TRUE,
+              color = ucsb_light, fill = ucsb_grey, alpha = 0.3, linewidth = 0.8) +
+  geom_point(aes(size = Views, color = Views), alpha = 0.85) +
+  scale_color_gradient(low = ucsb_gold, high = ucsb_blue, labels = comma) +
+  scale_size_continuous(range = c(4, 12), labels = comma) +
+  scale_x_continuous(labels = function(x) paste0(x, "%")) +
+  scale_y_continuous(labels = function(x) paste0(x, "%")) +
+  labs(
+    title    = "Reel Skip Rate vs. Engagement Rate",
+    subtitle = "Bubble size and color = Views. Lower skip + higher engagement = best reels.",
+    x = "Skip Rate", y = "Engagement Rate",
+    color = "Views", size = "Views",
+    caption  = "Source: UCSB Rec Instagram Reel data"
+  ) +
+  theme_ucsb()
+```
+
+## Top Reels
+
+```{r top-reels-table}
+reels |>
+  arrange(desc(Views)) |>
+  select(Date, Caption_Short, Engagement_Rate_Pct, Views, Reach, Likes, Shares, Skip_Rate_Pct) |>
+  mutate(
+    Engagement_Rate_Pct = paste0(Engagement_Rate_Pct, "%"),
+    Skip_Rate_Pct       = ifelse(is.na(Skip_Rate_Pct), "—", paste0(Skip_Rate_Pct, "%"))
+  ) |>
+  rename(
+    `Caption`   = Caption_Short,
+    `Eng Rate`  = Engagement_Rate_Pct,
+    `Skip Rate` = Skip_Rate_Pct
+  ) |>
+  kbl() |>
+  kable_styling(bootstrap_options = c("striped","hover","condensed")) |>
+  column_spec(3, bold = TRUE, color = ucsb_blue)
+```
+
+---
+
+# Audience Demographics {.tabset}
+
+## Gender Split
+
+```{r gender-donut, fig.height=4}
+gender_totals <- demo |>
+  filter(Age_Group == "13-17") |>   # one row per gender — use any age group to get Total
+  select(Gender, Total)             # Total column = overall % per gender
+
+ggplot(gender_totals, aes(x = 2, y = Total, fill = Gender)) +
+  geom_col(width = 1, color = "white", linewidth = 0.8) +
+  coord_polar(theta = "y") +
+  xlim(0.5, 2.5) +
+  geom_text(aes(label = paste0(Gender, "\n", Total, "%")),
+            position = position_stack(vjust = 0.5), size = 3.5,
+            color = "white", fontface = "bold") +
+  scale_fill_manual(values = c("Female"          = ucsb_blue,
+                                "Male"            = ucsb_gold,
+                                "Prefer Not To Say" = ucsb_light)) +
+  labs(
+    title   = "Audience Gender Distribution — Winter Quarter 2026",
+    caption = "Source: UCSB Rec Instagram Audience Demographics"
+  ) +
+  theme_void() +
+  theme(
+    plot.title   = element_text(color = ucsb_blue, face = "bold", size = 14, hjust = 0.5),
+    plot.caption = element_text(color = "grey55", size = 8),
+    legend.position = "none"
+  )
+```
+
+## Age by Gender
+
+```{r age-gender-bar, fig.height=4.5}
+demo |>
+  filter(Age_Group != "Total") |>
+  mutate(Age_Group = factor(Age_Group,
+                            levels = c("13-17","18-24","25-34",
+                                       "35-44","45-54","55-64","65+"))) |>
+  ggplot(aes(x = Age_Group, y = Percentage, fill = Gender)) +
+  geom_col(position = "dodge", alpha = 0.85) +
+  scale_fill_manual(values = c("Female"            = ucsb_blue,
+                                "Male"              = ucsb_gold,
+                                "Prefer Not To Say" = ucsb_light)) +
+  scale_y_continuous(labels = function(x) paste0(x, "%")) +
+  labs(
+    title    = "Audience Age & Gender Breakdown",
+    subtitle = "% of total audience by age group and gender — Winter Quarter 2026",
+    x = "Age Group", y = "% of Audience", fill = "Gender",
+    caption  = "Source: UCSB Rec Instagram Audience Demographics"
+  ) +
+  theme_ucsb()
+```
+
+```{r age-gender-table}
+demo |>
+  filter(Age_Group != "Total") |>
+  select(Gender, Age_Group, Percentage) |>
+  pivot_wider(names_from = Gender, values_from = Percentage) |>
+  mutate(Total = rowSums(across(where(is.numeric)), na.rm = TRUE)) |>
+  arrange(factor(Age_Group, levels = c("13-17","18-24","25-34",
+                                        "35-44","45-54","55-64","65+"))) |>
+  kbl(digits = 2) |>
+  kable_styling(bootstrap_options = c("striped","hover","condensed"), full_width = FALSE) |>
+  column_spec(5, bold = TRUE)
+```
+
+---
+
+# Key Takeaways
+
+```{r takeaways-setup, include=FALSE}
+top_post  <- posts |> arrange(desc(Engagement_Rate_Pct)) |> slice(1)
+top_reel  <- reels |> arrange(desc(Views)) |> slice(1)
+best_day  <- posts |> group_by(DayOfWeek) |>
+             summarise(avg = mean(Reach)) |> arrange(desc(avg)) |> slice(1)
+peak_week <- posts |> group_by(Week) |>
+             summarise(eng = sum(Engagements)) |> arrange(desc(eng)) |> slice(1)
+```
+
+- **`r nrow(posts)` posts** and **`r nrow(reels)` reels** published across `r n_distinct(posts$Week)` weeks.
+- **Average engagement rate: `r round(mean(posts$Engagement_Rate_Pct), 2)`%** — above the 1–3% institutional benchmark.
+- **Carousels outperform** all other formats in both engagement rate and reach.
+- **Top post:** "`r str_trunc(top_post$Caption_Short, 60)`" at `r top_post$Engagement_Rate_Pct`% engagement rate.
+- **Top reel by views:** "`r str_trunc(top_reel$Caption_Short, 60)`" with `r comma(top_reel$Views)` views.
+- **Best posting day** by average reach: **`r best_day$DayOfWeek`**.
+- **Peak engagement week:** Week `r peak_week$Week` with `r comma(peak_week$eng)` total engagements.
+- **Core audience:** Female (42.6%), aged 18–24 — aligned with UCSB's undergraduate population.
+
+---
